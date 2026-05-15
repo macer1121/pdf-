@@ -1531,7 +1531,7 @@
 
                     // 绘制页码 (底部居中，字体大小 11pt，参照 Word 默认)
                     const pageNumText = String(pageNumber);
-                    const fontSize = 9;                          // 小五号（9pt）
+                    const fontSize = 7;                          // 小五号（9pt）
                     // 使用 Times-Roman（衬线字体，视觉接近宋体）
                     const timesFont = await pdfDoc.embedFont(PDFLib.StandardFonts.TimesRoman);
                     const textWidth = timesFont.widthOfTextAtSize(pageNumText, fontSize);
@@ -1542,7 +1542,7 @@
                         x: textX,
                         y: textY,
                         size: fontSize,
-                        font: timesFont,
+                        font: font,
                         color: rgb(0, 0, 0),
                     });
 
