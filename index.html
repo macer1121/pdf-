@@ -1,0 +1,1656 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>图片分组管理工具（删除恢复版）</title>
+    <!-- JSZip 用于 ZIP 下载 -->
+    <script src="https://cdn.jsdelivr.net/npm/jszip@3.10.1/dist/jszip.min.js">
+    </script>
+    <!-- pdf-lib 用于 PDF 生成 -->
+    <script src="https://unpkg.com/pdf-lib@1.17.1/dist/pdf-lib.min.js">
+    </script>
+    <style>
+        /* ===== 全局重置 & 基础样式 ===== */
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+        }
+        body {
+            font-family: 'Segoe UI', 'PingFang SC', Roboto, sans-serif;
+            background: #f5f7fb;
+            color: #1e293b;
+            padding: 24px;
+            min-height: 100vh;
+        }
+        a,
+        button {
+            cursor: pointer;
+        }
+
+        /* ===== 主容器 ===== */
+        .app-container {
+            max-width: 1440px;
+            margin: 0 auto;
+            background: #ffffff;
+            border-radius: 20px;
+            box-shadow: 0 8px 40px rgba(0, 0, 0, 0.08);
+            padding: 28px 32px 36px;
+        }
+
+        /* ===== 顶部标题栏 ===== */
+        .header {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            flex-wrap: wrap;
+            gap: 16px;
+            margin-bottom: 24px;
+            padding-bottom: 16px;
+            border-bottom: 2px solid #f0f2f5;
+        }
+        .header h1 {
+            font-size: 24px;
+            font-weight: 700;
+            background: linear-gradient(135deg, #3b82f6, #8b5cf6);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+        .header h1 span {
+            font-size: 26px;
+        }
+        .header-actions {
+            display: flex;
+            align-items: center;
+            gap: 16px;
+            flex-wrap: wrap;
+        }
+        .upload-btn-wrapper {
+            position: relative;
+            overflow: hidden;
+            display: inline-block;
+        }
+        .upload-btn-wrapper input[type="file"] {
+            position: absolute;
+            left: 0;
+            top: 0;
+            opacity: 0;
+            width: 100%;
+            height: 100%;
+            cursor: pointer;
+        }
+        .btn {
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+            padding: 10px 22px;
+            border: none;
+            border-radius: 10px;
+            font-size: 15px;
+            font-weight: 600;
+            transition: all 0.2s;
+            background: #eef2f7;
+            color: #1e293b;
+        }
+        .btn:hover {
+            transform: translateY(-1px);
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+        }
+        .btn-primary {
+            background: #3b82f6;
+            color: #fff;
+        }
+        .btn-primary:hover {
+            background: #2563eb;
+        }
+        .btn-success {
+            background: #10b981;
+            color: #fff;
+        }
+        .btn-success:hover {
+            background: #059669;
+        }
+        .btn-warning {
+            background: #f59e0b;
+            color: #fff;
+        }
+        .btn-warning:hover {
+            background: #d97706;
+        }
+        .btn-danger {
+            background: #ef4444;
+            color: #fff;
+        }
+        .btn-danger:hover {
+            background: #dc2626;
+        }
+        .btn-outline {
+            background: transparent;
+            border: 2px solid #d1d5db;
+        }
+        .btn-outline:hover {
+            border-color: #3b82f6;
+            background: #f0f4ff;
+        }
+        .btn:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+            transform: none !important;
+        }
+
+        .status-badge {
+            font-size: 14px;
+            padding: 6px 16px;
+            border-radius: 20px;
+            background: #f0f2f5;
+            color: #64748b;
+        }
+        .status-badge strong {
+            color: #1e293b;
+        }
+
+        /* ===== 主体布局 (左右两栏) ===== */
+        .main-layout {
+            display: flex;
+            gap: 28px;
+            margin-top: 4px;
+        }
+        .left-panel {
+            flex: 1;
+            min-width: 0;
+        }
+        .right-panel {
+            width: 340px;
+            flex-shrink: 0;
+        }
+
+        /* ===== 左侧：图片网格 ===== */
+        .panel-header {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            margin-bottom: 14px;
+        }
+        .panel-header h2 {
+            font-size: 18px;
+            font-weight: 600;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+        .panel-header .hint {
+            font-size: 13px;
+            color: #94a3b8;
+            font-weight: 400;
+        }
+
+        .image-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(110px, 1fr));
+            gap: 10px;
+            max-height: 580px;
+            overflow-y: auto;
+            padding: 4px 2px 8px;
+            background: #fafbfc;
+            border-radius: 12px;
+            border: 1px solid #eef2f6;
+            min-height: 120px;
+        }
+        .image-grid::-webkit-scrollbar {
+            width: 6px;
+        }
+        .image-grid::-webkit-scrollbar-thumb {
+            background: #d1d5db;
+            border-radius: 4px;
+        }
+        .image-grid::-webkit-scrollbar-track {
+            background: #f1f3f5;
+        }
+
+        /* 每一个图片卡片 */
+        .img-card {
+            position: relative;
+            border-radius: 10px;
+            overflow: hidden;
+            background: #fff;
+            border: 2px solid #eef2f6;
+            transition: border-color 0.2s, box-shadow 0.2s;
+            cursor: pointer;
+            user-select: none;
+        }
+        .img-card:hover {
+            border-color: #93c5fd;
+            box-shadow: 0 4px 12px rgba(59, 130, 246, 0.12);
+        }
+        .img-card.break-after {
+            border-color: #f59e0b;
+            box-shadow: 0 0 0 2px #f59e0b44;
+        }
+        .img-card.deleted {
+            border-color: #d1d5db;
+            box-shadow: none;
+            opacity: 0.75;
+        }
+        .img-card.deleted:hover {
+            border-color: #9ca3af;
+            box-shadow: 0 2px 8px rgba(0, 0, 0, 0.06);
+        }
+        .img-card .thumb-wrap {
+            width: 100%;
+            aspect-ratio: 1 / 1;
+            overflow: hidden;
+            background: #f1f5f9;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            position: relative;
+        }
+        .img-card .thumb-wrap img {
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
+            display: block;
+            transition: transform 0.25s;
+            pointer-events: none;
+        }
+        .img-card.deleted .thumb-wrap img {
+            filter: grayscale(1) brightness(0.7);
+            transform: none !important;
+        }
+        .img-card:hover .thumb-wrap img {
+            transform: scale(1.04);
+        }
+        .img-card.deleted:hover .thumb-wrap img {
+            transform: none;
+        }
+
+        /* 删除/恢复 遮罩标记 */
+        .deleted-marker {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            background: rgba(0, 0, 0, 0.65);
+            color: #fff;
+            padding: 6px 16px;
+            border-radius: 20px;
+            font-size: 14px;
+            font-weight: 700;
+            letter-spacing: 1px;
+            pointer-events: none;
+            z-index: 2;
+            backdrop-filter: blur(4px);
+            border: 1px solid rgba(255, 255, 255, 0.2);
+        }
+
+        .img-card .card-footer {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: 4px 8px 6px;
+            background: #ffffff;
+            font-size: 12px;
+            border-top: 1px solid #f1f3f5;
+        }
+        .img-card.deleted .card-footer {
+            background: #f3f4f6;
+        }
+        .img-card .card-footer .index {
+            font-weight: 600;
+            color: #3b82f6;
+            background: #eef2ff;
+            border-radius: 6px;
+            padding: 0 8px;
+            line-height: 22px;
+            font-size: 11px;
+        }
+        .img-card.deleted .card-footer .index {
+            background: #e5e7eb;
+            color: #9ca3af;
+        }
+        .img-card .card-footer .break-toggle {
+            width: 26px;
+            height: 26px;
+            border: none;
+            border-radius: 6px;
+            background: #f1f3f5;
+            color: #94a3b8;
+            font-size: 16px;
+            line-height: 1;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            transition: all 0.2s;
+            padding: 0;
+        }
+        .img-card .card-footer .break-toggle:hover {
+            background: #fde68a;
+            color: #d97706;
+        }
+        .img-card.break-after .card-footer .break-toggle {
+            background: #f59e0b;
+            color: #fff;
+        }
+        .img-card .card-footer .break-toggle .icon {
+            pointer-events: none;
+        }
+
+        /* 删除/恢复按钮 (右上角) */
+        .delete-btn {
+            position: absolute;
+            top: 4px;
+            right: 4px;
+            z-index: 5;
+            width: 28px;
+            height: 28px;
+            border: none;
+            border-radius: 50%;
+            font-size: 16px;
+            line-height: 1;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            cursor: pointer;
+            transition: background 0.2s, transform 0.2s, opacity 0.2s;
+            opacity: 0;
+            box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);
+        }
+        .img-card:hover .delete-btn {
+            opacity: 1;
+        }
+        .delete-btn.delete {
+            background: rgba(239, 68, 68, 0.9);
+            color: #fff;
+        }
+        .delete-btn.delete:hover {
+            background: #dc2626;
+            transform: scale(1.1);
+        }
+        .delete-btn.restore {
+            background: rgba(16, 185, 129, 0.9);
+            color: #fff;
+        }
+        .delete-btn.restore:hover {
+            background: #059669;
+            transform: scale(1.1);
+        }
+        .img-card.deleted .delete-btn {
+            opacity: 1 !important;
+        }
+
+        /* 断点分隔线提示 */
+        .break-indicator {
+            grid-column: 1 / -1;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            padding: 2px 0;
+            margin: 2px 0;
+        }
+        .break-indicator .line {
+            flex: 1;
+            height: 2px;
+            background: linear-gradient(90deg, #f59e0b, #fbbf24, #f59e0b);
+            border-radius: 2px;
+        }
+        .break-indicator .label {
+            font-size: 12px;
+            font-weight: 700;
+            color: #d97706;
+            background: #fffbeb;
+            padding: 0 14px;
+            border-radius: 12px;
+            line-height: 24px;
+            white-space: nowrap;
+        }
+
+        /* ===== 右侧面板 ===== */
+        .right-panel {
+            display: flex;
+            flex-direction: column;
+            gap: 18px;
+        }
+        .right-card {
+            background: #fafbfc;
+            border-radius: 14px;
+            padding: 18px 20px;
+            border: 1px solid #eef2f6;
+        }
+        .right-card h3 {
+            font-size: 16px;
+            font-weight: 600;
+            margin-bottom: 12px;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+        .right-card h3 .count {
+            font-size: 13px;
+            font-weight: 400;
+            color: #94a3b8;
+        }
+
+        /* 分组列表 */
+        .group-list {
+            display: flex;
+            flex-direction: column;
+            gap: 6px;
+            max-height: 260px;
+            overflow-y: auto;
+            padding-right: 4px;
+        }
+        .group-list::-webkit-scrollbar {
+            width: 4px;
+        }
+        .group-list::-webkit-scrollbar-thumb {
+            background: #d1d5db;
+            border-radius: 4px;
+        }
+        .group-item {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: 8px 12px;
+            background: #ffffff;
+            border-radius: 8px;
+            border: 1px solid #eef2f6;
+            font-size: 14px;
+            transition: all 0.15s;
+        }
+        .group-item:hover {
+            border-color: #cbd5e1;
+        }
+        .group-item .g-name {
+            font-weight: 600;
+            color: #3b82f6;
+        }
+        .group-item .g-range {
+            color: #64748b;
+            font-size: 13px;
+        }
+        .group-item .g-count {
+            font-size: 12px;
+            color: #94a3b8;
+            background: #f1f3f5;
+            padding: 0 10px;
+            border-radius: 10px;
+            line-height: 22px;
+        }
+
+        /* 组合选择 */
+        .combine-selector {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 8px;
+            margin: 8px 0 12px;
+        }
+        .combine-selector .chip {
+            padding: 6px 14px;
+            border-radius: 8px;
+            border: 2px solid #d1d5db;
+            background: #fff;
+            font-size: 13px;
+            font-weight: 600;
+            transition: all 0.2s;
+            cursor: pointer;
+            user-select: none;
+        }
+        .combine-selector .chip:hover {
+            border-color: #93c5fd;
+            background: #f0f4ff;
+        }
+        .combine-selector .chip.selected {
+            border-color: #3b82f6;
+            background: #3b82f6;
+            color: #fff;
+        }
+        .combine-selector .chip.disabled {
+            opacity: 0.4;
+            cursor: not-allowed;
+            border-color: #e5e7eb;
+            background: #f9fafb;
+        }
+        .combine-order {
+            font-size: 13px;
+            color: #64748b;
+            padding: 4px 0 8px;
+        }
+        .combine-order .order-tags {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 6px;
+            margin-top: 4px;
+        }
+        .combine-order .order-tags .tag {
+            background: #eef2ff;
+            color: #3b82f6;
+            padding: 2px 12px;
+            border-radius: 12px;
+            font-size: 12px;
+            font-weight: 500;
+        }
+        .download-actions {
+            display: flex;
+            gap: 10px;
+            flex-wrap: wrap;
+            margin-top: 4px;
+        }
+
+        /* ===== 空状态 ===== */
+        .empty-state {
+            text-align: center;
+            padding: 48px 20px;
+            color: #94a3b8;
+        }
+        .empty-state .icon {
+            font-size: 52px;
+            margin-bottom: 12px;
+        }
+        .empty-state p {
+            font-size: 15px;
+        }
+
+        /* ===== 响应式 ===== */
+        @media (max-width: 960px) {
+            .main-layout {
+                flex-direction: column;
+            }
+            .right-panel {
+                width: 100%;
+            }
+            .image-grid {
+                max-height: 400px;
+                grid-template-columns: repeat(auto-fill, minmax(90px, 1fr));
+            }
+            .app-container {
+                padding: 16px;
+            }
+        }
+        @media (max-width: 480px) {
+            .header h1 {
+                font-size: 18px;
+            }
+            .btn {
+                padding: 8px 14px;
+                font-size: 13px;
+            }
+            .image-grid {
+                grid-template-columns: repeat(auto-fill, minmax(70px, 1fr));
+                gap: 6px;
+            }
+            .img-card .card-footer {
+                font-size: 10px;
+                padding: 2px 4px 4px;
+            }
+            .right-card {
+                padding: 12px 14px;
+            }
+        }
+
+        /* ===== 加载动画 ===== */
+        .loading-spinner {
+            display: inline-block;
+            width: 18px;
+            height: 18px;
+            border: 2px solid #e2e8f0;
+            border-top: 2px solid #3b82f6;
+            border-radius: 50%;
+            animation: spin 0.7s linear infinite;
+        }
+        @keyframes spin {
+            to {
+                transform: rotate(360deg);
+            }
+        }
+
+        /* ===== 提示 Toast ===== */
+        .toast {
+            position: fixed;
+            bottom: 30px;
+            left: 50%;
+            transform: translateX(-50%);
+            background: #1e293b;
+            color: #fff;
+            padding: 12px 28px;
+            border-radius: 12px;
+            font-size: 14px;
+            font-weight: 500;
+            box-shadow: 0 8px 30px rgba(0, 0, 0, 0.2);
+            z-index: 999;
+            transition: opacity 0.3s, transform 0.3s;
+            opacity: 0;
+            pointer-events: none;
+        }
+        .toast.show {
+            opacity: 1;
+            transform: translateX(-50%) translateY(0);
+        }
+        .toast.success {
+            background: #059669;
+        }
+        .toast.error {
+            background: #dc2626;
+        }
+        .toast.info {
+            background: #3b82f6;
+        }
+
+        /* ===== 图片预览模态框 ===== */
+        .modal-overlay {
+            display: none;
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0, 0, 0, 0.85);
+            z-index: 1000;
+            justify-content: center;
+            align-items: center;
+            padding: 20px;
+        }
+        .modal-overlay.active {
+            display: flex;
+        }
+        .modal-overlay .modal-close {
+            position: absolute;
+            top: 20px;
+            right: 30px;
+            font-size: 40px;
+            color: #fff;
+            cursor: pointer;
+            background: none;
+            border: none;
+            line-height: 1;
+            transition: opacity 0.2s;
+        }
+        .modal-overlay .modal-close:hover {
+            opacity: 0.7;
+        }
+        .modal-overlay img {
+            max-width: 95%;
+            max-height: 90%;
+            border-radius: 8px;
+            box-shadow: 0 0 40px rgba(0, 0, 0, 0.6);
+            object-fit: contain;
+        }
+    </style>
+</head>
+<body>
+
+    <!-- ===== Toast 提示 ===== -->
+    <div class="toast" id="toast"></div>
+
+    <!-- ===== 图片预览模态框 ===== -->
+    <div class="modal-overlay" id="previewModal">
+        <button class="modal-close" id="closePreview">&times;</button>
+        <img id="previewImage" src="" alt="预览" />
+    </div>
+
+    <!-- ===== 主应用 ===== -->
+    <div class="app-container">
+
+        <!-- 顶部 -->
+        <header class="header">
+            <h1><span>🖼️</span> 图片分组管理工具（删除恢复版）</h1>
+            <div class="header-actions">
+                <span class="status-badge" id="statusBadge">
+                    📁 未加载图片
+                </span>
+                <div class="upload-btn-wrapper">
+                    <button class="btn btn-primary">📤 上传文件夹</button>
+                    <input type="file" id="folderInput" webkitdirectory multiple accept="image/*" />
+                </div>
+                <button class="btn btn-outline" id="clearBtn" disabled>🗑️ 清空</button>
+            </div>
+        </header>
+
+        <!-- 主体 -->
+        <div class="main-layout">
+
+            <!-- ===== 左侧：图片网格 ===== -->
+            <div class="left-panel">
+                <div class="panel-header">
+                    <h2>
+                        🖼️ 图片列表
+                        <span class="hint" id="gridHint">点击图片预览 · 右上角 × 删除 / ↺ 恢复</span>
+                    </h2>
+                    <span id="gridCount" style="font-size:14px;color:#94a3b8;">0 张</span>
+                </div>
+                <div class="image-grid" id="imageGrid">
+                    <!-- 空状态由 JS 控制 -->
+                </div>
+            </div>
+
+            <!-- ===== 右侧：分组 & 下载 ===== -->
+            <div class="right-panel">
+
+                <!-- 分组信息 -->
+                <div class="right-card">
+                    <h3>
+                        📂 分组列表
+                        <span class="count" id="groupCount">0 组</span>
+                    </h3>
+                    <div class="group-list" id="groupList">
+                        <div style="color:#94a3b8;font-size:14px;padding:4px 0;">请先上传图片并设置断点</div>
+                    </div>
+                    <div style="margin-top:10px;display:flex;gap:8px;flex-wrap:wrap;">
+                        <button class="btn btn-outline" id="clearBreaksBtn" disabled style="font-size:13px;padding:6px 14px;">
+                            🔄 清除所有断点
+                        </button>
+                        <button class="btn btn-outline" id="autoGroupBtn" disabled style="font-size:13px;padding:6px 14px;">
+                            ⚡ 每50张一组
+                        </button>
+                    </div>
+                </div>
+
+                <!-- 组合下载 -->
+                <div class="right-card">
+                    <h3>📦 组合下载</h3>
+                    <div style="font-size:14px;color:#64748b;margin-bottom:6px;">
+                        点击选择要下载的组（已删除图片自动跳过）
+                    </div>
+                    <div class="combine-selector" id="combineSelector">
+                        <span style="color:#94a3b8;font-size:13px;">暂无分组</span>
+                    </div>
+                    <div class="combine-order" id="combineOrder">
+                        <span>📋 已选顺序：</span>
+                        <span style="color:#94a3b8;" id="orderPlaceholder">未选择</span>
+                        <div class="order-tags" id="orderTags"></div>
+                    </div>
+                    <div class="download-actions">
+                        <button class="btn btn-success" id="downloadZIPBtn" disabled>
+                            ⬇️ 下载组合 (ZIP)
+                        </button>
+                        <button class="btn btn-warning" id="downloadPDFBtn" disabled>
+                            📄 下载 PDF (每页3张)
+                        </button>
+                        <button class="btn btn-outline" id="resetCombineBtn" disabled style="font-size:13px;padding:6px 14px;">
+                            🔄 清空选择
+                        </button>
+                    </div>
+                    <div style="margin-top:8px;font-size:12px;color:#94a3b8;">
+                        💡 图片按原序号顺序保存，竖图已自动左旋为横版。灰色卡片为已删除，导出时自动排除。
+                    </div>
+                </div>
+
+            </div>
+        </div>
+
+    </div>
+
+    <script>
+        // ============================================================
+        //  全局状态
+        // ============================================================
+        const state = {
+            // 所有图片数据：{ file, name, index, isPortrait, blobUrl, rotatedBlob, width, height, deleted }
+            images: [],
+            // 断点索引集合（在该索引之后断开），例如 Set { 50, 100, 150 }
+            breakPoints: new Set(),
+            // 用户选择的组合顺序（分组索引数组），例如 [0, 2, 1]
+            selectedGroups: [],
+            // 是否正在处理
+            processing: false,
+        };
+
+        // DOM 引用
+        const $ = (id) => document.getElementById(id);
+        const grid = $('imageGrid');
+        const gridHint = $('gridHint');
+        const gridCount = $('gridCount');
+        const statusBadge = $('statusBadge');
+        const folderInput = $('folderInput');
+        const clearBtn = $('clearBtn');
+        const groupList = $('groupList');
+        const groupCount = $('groupCount');
+        const clearBreaksBtn = $('clearBreaksBtn');
+        const autoGroupBtn = $('autoGroupBtn');
+        const combineSelector = $('combineSelector');
+        const combineOrder = $('combineOrder');
+        const orderPlaceholder = $('orderPlaceholder');
+        const orderTags = $('orderTags');
+        const downloadZIPBtn = $('downloadZIPBtn');
+        const downloadPDFBtn = $('downloadPDFBtn');
+        const resetCombineBtn = $('resetCombineBtn');
+        const toastEl = $('toast');
+
+        // 模态框
+        const previewModal = $('previewModal');
+        const previewImage = $('previewImage');
+        const closePreview = $('closePreview');
+
+        // ============================================================
+        //  工具函数
+        // ============================================================
+        function showToast(msg, type = 'info') {
+            toastEl.textContent = msg;
+            toastEl.className = 'toast ' + type + ' show';
+            clearTimeout(toastEl._timer);
+            toastEl._timer = setTimeout(() => {
+                toastEl.classList.remove('show');
+            }, 2800);
+        }
+
+        // 真正的自然排序（分段比较数字和字符串）
+        function naturalSort(a, b) {
+            const partsA = a.split(/(\d+)/);
+            const partsB = b.split(/(\d+)/);
+            const len = Math.max(partsA.length, partsB.length);
+            for (let i = 0; i < len; i++) {
+                const pieceA = partsA[i] || '';
+                const pieceB = partsB[i] || '';
+                const numA = parseInt(pieceA, 10);
+                const numB = parseInt(pieceB, 10);
+                if (!isNaN(numA) && !isNaN(numB)) {
+                    if (numA !== numB) return numA - numB;
+                    if (pieceA !== pieceB) return pieceA.localeCompare(pieceB, 'zh', { numeric: false });
+                } else {
+                    const cmp = pieceA.localeCompare(pieceB, 'zh', { numeric: false });
+                    if (cmp !== 0) return cmp;
+                }
+            }
+            return 0;
+        }
+
+        // 获取分组列表（基于断点）
+        function getGroups() {
+            const total = state.images.length;
+            if (total === 0) return [];
+            const breaks = Array.from(state.breakPoints).sort((a, b) => a - b);
+            const groups = [];
+            let start = 0;
+            for (const bp of breaks) {
+                if (bp <= start) continue;
+                if (bp > total) break;
+                groups.push({ start: start + 1, end: bp });
+                start = bp;
+            }
+            if (start < total) {
+                groups.push({ start: start + 1, end: total });
+            }
+            return groups;
+        }
+
+        // 根据组索引获取图片索引范围（0-indexed）
+        function getGroupRange(groupIdx) {
+            const groups = getGroups();
+            if (groupIdx < 0 || groupIdx >= groups.length) return null;
+            const g = groups[groupIdx];
+            return { start: g.start - 1, end: g.end - 1 };
+        }
+
+        // 获取有效的（未删除）图片索引列表
+        function getValidIndices() {
+            return state.images
+                .map((img, idx) => ({ img, idx }))
+                .filter(item => !item.img.deleted)
+                .map(item => item.idx);
+        }
+
+        // 更新所有 UI
+        function updateUI() {
+            renderGrid();
+            renderGroups();
+            renderCombineSelector();
+            updateCombineOrder();
+            updateButtons();
+            updateStatus();
+        }
+
+        // ============================================================
+        //  图片加载 & 处理
+        // ============================================================
+        async function loadFiles(files) {
+            if (state.processing) return;
+            state.processing = true;
+            showToast('正在处理图片，请稍候...', 'info');
+
+            const imageFiles = Array.from(files).filter(f =>
+                f.type.startsWith('image/') &&
+                /\.(jpg|jpeg|png|gif|bmp|webp|heic|heif)$/i.test(f.name)
+            );
+            if (imageFiles.length === 0) {
+                showToast('未找到图片文件，请上传包含图片的文件夹', 'error');
+                state.processing = false;
+                return;
+            }
+
+            imageFiles.sort((a, b) => naturalSort(a.name, b.name));
+
+            // 清空旧状态
+            for (const img of state.images) {
+                URL.revokeObjectURL(img.blobUrl);
+            }
+            state.images = [];
+            state.breakPoints.clear();
+            state.selectedGroups = [];
+
+            const total = imageFiles.length;
+            for (let i = 0; i < total; i++) {
+                const file = imageFiles[i];
+                try {
+                    const result = await processImage(file, i);
+                    result.deleted = false;
+                    state.images.push(result);
+                } catch (err) {
+                    console.warn('图片处理失败:', file.name, err);
+                    const blobUrl = URL.createObjectURL(file);
+                    state.images.push({
+                        file,
+                        name: file.name,
+                        index: i,
+                        isPortrait: false,
+                        blobUrl,
+                        rotatedBlob: null,
+                        width: 0,
+                        height: 0,
+                        deleted: false,
+                        failed: true,
+                    });
+                }
+                if (i % 20 === 0) {
+                    updateStatus();
+                }
+            }
+
+            state.processing = false;
+            updateUI();
+            showToast(`成功加载 ${state.images.length} 张图片！`, 'success');
+        }
+
+        // 处理单张图片：检测竖图，左旋成横版，并获取原始宽高
+        function processImage(file, index) {
+            return new Promise((resolve, reject) => {
+                const img = new Image();
+                const url = URL.createObjectURL(file);
+                img.onload = () => {
+                    const isPortrait = img.height > img.width;
+                    let rotatedBlob = null;
+                    let finalUrl = url;
+                    const origWidth = img.width;
+                    const origHeight = img.height;
+
+                    if (isPortrait) {
+                        const canvas = document.createElement('canvas');
+                        canvas.width = img.height;
+                        canvas.height = img.width;
+                        const ctx = canvas.getContext('2d');
+                        ctx.translate(canvas.width / 2, canvas.height / 2);
+                        ctx.rotate(-Math.PI / 2);
+                        ctx.drawImage(img, -img.width / 2, -img.height / 2);
+                        canvas.toBlob((blob) => {
+                            rotatedBlob = blob;
+                            finalUrl = URL.createObjectURL(blob);
+                            URL.revokeObjectURL(url);
+                            resolve({
+                                file,
+                                name: file.name,
+                                index,
+                                isPortrait: true,
+                                blobUrl: finalUrl,
+                                rotatedBlob,
+                                width: canvas.width,
+                                height: canvas.height,
+                                deleted: false,
+                                failed: false,
+                            });
+                        }, file.type || 'image/jpeg', 0.92);
+                    } else {
+                        resolve({
+                            file,
+                            name: file.name,
+                            index,
+                            isPortrait: false,
+                            blobUrl: url,
+                            rotatedBlob: null,
+                            width: origWidth,
+                            height: origHeight,
+                            deleted: false,
+                            failed: false,
+                        });
+                    }
+                };
+                img.onerror = () => {
+                    URL.revokeObjectURL(url);
+                    reject(new Error('图片加载失败'));
+                };
+                img.src = url;
+            });
+        }
+
+        // ============================================================
+        //  删除 / 恢复 图片（切换 deleted 状态）
+        // ============================================================
+        function toggleDeleteImage(idx) {
+            if (state.images.length === 0 || idx < 0 || idx >= state.images.length) return;
+            const img = state.images[idx];
+            img.deleted = !img.deleted;
+            // 清空组合选择（因为有效图片变化了）
+            state.selectedGroups = [];
+            updateUI();
+            if (img.deleted) {
+                showToast(`已标记删除：${img.name}，点击右上角 ↺ 可恢复`, 'info');
+            } else {
+                showToast(`已恢复：${img.name}`, 'success');
+            }
+        }
+
+        // ============================================================
+        //  图片预览
+        // ============================================================
+        function openPreview(url) {
+            previewImage.src = url;
+            previewModal.classList.add('active');
+        }
+
+        function closePreviewModal() {
+            previewModal.classList.remove('active');
+            previewImage.src = '';
+        }
+
+        closePreview.addEventListener('click', closePreviewModal);
+        previewModal.addEventListener('click', (e) => {
+            if (e.target === previewModal) closePreviewModal();
+        });
+        document.addEventListener('keydown', (e) => {
+            if (e.key === 'Escape') closePreviewModal();
+        });
+
+        // ============================================================
+        //  渲染：图片网格
+        // ============================================================
+        function renderGrid() {
+            const imgs = state.images;
+            if (imgs.length === 0) {
+                grid.innerHTML = `
+                        <div class="empty-state" style="grid-column:1/-1;">
+                            <div class="icon">📁</div>
+                            <p>点击「上传文件夹」选择包含图片的文件夹<br/>支持 jpg / png / webp / gif 等格式</p>
+                        </div>
+                    `;
+                return;
+            }
+
+            const breaks = Array.from(state.breakPoints).sort((a, b) => a - b);
+            const breakSet = new Set(breaks);
+
+            let html = '';
+            for (let i = 0; i < imgs.length; i++) {
+                const img = imgs[i];
+                const idx = i + 1; // 1-based
+                const isBreak = breakSet.has(idx);
+                const isDeleted = img.deleted;
+
+                html += `
+                        <div class="img-card ${isBreak ? 'break-after' : ''} ${isDeleted ? 'deleted' : ''}" data-index="${idx}">
+                            <button class="delete-btn ${isDeleted ? 'restore' : 'delete'}" data-idx="${i}" title="${isDeleted ? '恢复此图片' : '删除此图片'}">
+                                ${isDeleted ? '↺' : '×'}
+                            </button>
+                            <div class="thumb-wrap">
+                                <img src="${img.blobUrl}" alt="${img.name}" loading="lazy" data-preview="${img.blobUrl}" />
+                                ${isDeleted ? '<div class="deleted-marker">已删除</div>' : ''}
+                            </div>
+                            <div class="card-footer">
+                                <span class="index">#${idx}</span>
+                                <button class="break-toggle" data-idx="${idx}" title="点击切换分组断点">
+                                    <span class="icon">⚡</span>
+                                </button>
+                            </div>
+                        </div>
+                    `;
+
+                if (isBreak && idx < imgs.length) {
+                    html += `
+                            <div class="break-indicator">
+                                <span class="line"></span>
+                                <span class="label">🔸 分组断点 #${idx}</span>
+                                <span class="line"></span>
+                            </div>
+                        `;
+                }
+            }
+
+            grid.innerHTML = html;
+
+            // 绑定删除/恢复按钮事件
+            grid.querySelectorAll('.delete-btn').forEach(btn => {
+                btn.addEventListener('click', (e) => {
+                    e.stopPropagation();
+                    const idx = parseInt(btn.dataset.idx, 10);
+                    toggleDeleteImage(idx);
+                });
+            });
+
+            // 绑定断点按钮事件
+            grid.querySelectorAll('.break-toggle').forEach(btn => {
+                btn.addEventListener('click', (e) => {
+                    e.stopPropagation();
+                    const idx = parseInt(btn.dataset.idx, 10);
+                    toggleBreak(idx);
+                });
+            });
+
+            // 点击卡片预览图片
+            grid.querySelectorAll('.img-card').forEach(card => {
+                card.addEventListener('click', (e) => {
+                    if (e.target.closest('.delete-btn') || e.target.closest('.break-toggle')) return;
+                    const imgEl = card.querySelector('.thumb-wrap img');
+                    if (imgEl) {
+                        const url = imgEl.dataset.preview || imgEl.src;
+                        openPreview(url);
+                    }
+                });
+            });
+
+            gridCount.textContent = `${imgs.length} 张`;
+        }
+
+        // ============================================================
+        //  断点管理
+        // ============================================================
+        function toggleBreak(idx) {
+            if (state.images.length === 0) return;
+            if (idx >= state.images.length) return;
+            const key = idx;
+            if (state.breakPoints.has(key)) {
+                state.breakPoints.delete(key);
+            } else {
+                state.breakPoints.add(key);
+            }
+            state.selectedGroups = [];
+            updateUI();
+        }
+
+        function clearAllBreaks() {
+            state.breakPoints.clear();
+            state.selectedGroups = [];
+            updateUI();
+            showToast('已清除所有分组断点', 'info');
+        }
+
+        function autoGroupBy50() {
+            const total = state.images.length;
+            if (total === 0) return;
+            state.breakPoints.clear();
+            for (let i = 50; i < total; i += 50) {
+                state.breakPoints.add(i);
+            }
+            state.selectedGroups = [];
+            updateUI();
+            showToast(`已自动按每50张分为 ${Math.ceil(total / 50)} 组`, 'success');
+        }
+
+        // ============================================================
+        //  渲染：分组列表
+        // ============================================================
+        function renderGroups() {
+            const groups = getGroups();
+            groupCount.textContent = `${groups.length} 组`;
+
+            if (groups.length === 0) {
+                groupList.innerHTML = `
+                        <div style="color:#94a3b8;font-size:14px;padding:8px 0;">
+                            ${state.images.length > 0 ? '点击图片上的 ⚡ 设置断点来分组' : '请先上传图片'}
+                        </div>
+                    `;
+                return;
+            }
+
+            let html = '';
+            groups.forEach((g, idx) => {
+                const count = g.end - g.start + 1;
+                html += `
+                        <div class="group-item">
+                            <span class="g-name">第 ${idx + 1} 组</span>
+                            <span class="g-range">#${g.start} – #${g.end}</span>
+                            <span class="g-count">${count} 张</span>
+                        </div>
+                    `;
+            });
+            groupList.innerHTML = html;
+        }
+
+        // ============================================================
+        //  渲染：组合选择器
+        // ============================================================
+        function renderCombineSelector() {
+            const groups = getGroups();
+            if (groups.length === 0) {
+                combineSelector.innerHTML =
+                    `<span style="color:#94a3b8;font-size:13px;">暂无分组，请先设置断点</span>`;
+                return;
+            }
+
+            const selectedSet = new Set(state.selectedGroups);
+            let html = '';
+            groups.forEach((g, idx) => {
+                const sel = selectedSet.has(idx);
+                html += `
+                        <div class="chip ${sel ? 'selected' : ''}" data-gidx="${idx}">
+                            第${idx + 1}组
+                        </div>
+                    `;
+            });
+            combineSelector.innerHTML = html;
+
+            combineSelector.querySelectorAll('.chip').forEach(chip => {
+                chip.addEventListener('click', () => {
+                    const gidx = parseInt(chip.dataset.gidx, 10);
+                    toggleGroupSelection(gidx);
+                });
+            });
+        }
+
+        function toggleGroupSelection(gidx) {
+            const groups = getGroups();
+            if (gidx < 0 || gidx >= groups.length) return;
+            const idx = state.selectedGroups.indexOf(gidx);
+            if (idx !== -1) {
+                state.selectedGroups.splice(idx, 1);
+            } else {
+                state.selectedGroups.push(gidx);
+            }
+            renderCombineSelector();
+            updateCombineOrder();
+            updateButtons();
+        }
+
+        function updateCombineOrder() {
+            const groups = getGroups();
+            const sel = state.selectedGroups;
+            if (sel.length === 0) {
+                orderPlaceholder.textContent = '未选择';
+                orderTags.innerHTML = '';
+                return;
+            }
+            orderPlaceholder.textContent = '';
+            let tagsHtml = '';
+            sel.forEach((gidx, order) => {
+                const g = groups[gidx];
+                if (g) {
+                    tagsHtml +=
+                        `<span class="tag">${order + 1}. 第${gidx + 1}组 (#${g.start}–${g.end})</span>`;
+                }
+            });
+            orderTags.innerHTML = tagsHtml;
+        }
+
+        function resetCombine() {
+            state.selectedGroups = [];
+            renderCombineSelector();
+            updateCombineOrder();
+            updateButtons();
+            showToast('已清空组合选择', 'info');
+        }
+
+        // ============================================================
+        //  按钮状态更新
+        // ============================================================
+        function updateButtons() {
+            const hasImages = state.images.length > 0;
+            const hasBreaks = state.breakPoints.size > 0;
+            const hasSelection = state.selectedGroups.length > 0;
+            const hasValidImages = getValidIndices().length > 0;
+
+            clearBtn.disabled = !hasImages;
+            clearBreaksBtn.disabled = !hasBreaks;
+            autoGroupBtn.disabled = !hasImages;
+            downloadZIPBtn.disabled = !(hasImages && hasBreaks && hasSelection && hasValidImages);
+            downloadPDFBtn.disabled = !(hasImages && hasBreaks && hasSelection && hasValidImages);
+            resetCombineBtn.disabled = !hasSelection;
+        }
+
+        function updateStatus() {
+            const total = state.images.length;
+            if (total === 0) {
+                statusBadge.innerHTML = `📁 未加载图片`;
+            } else {
+                const rotated = state.images.filter(i => i.isPortrait).length;
+                const deleted = state.images.filter(i => i.deleted).length;
+                const valid = total - deleted;
+                statusBadge.innerHTML =
+                    `📁 <strong>${total}</strong> 张 · 已旋转 <strong>${rotated}</strong> 张竖图 · 已删除 <strong>${deleted}</strong> 张（有效 ${valid} 张）`;
+            }
+        }
+
+        // ============================================================
+        //  下载功能 - ZIP
+        // ============================================================
+        async function downloadCombinationZIP() {
+            const groups = getGroups();
+            const sel = state.selectedGroups;
+            if (sel.length === 0) {
+                showToast('请先选择要下载的组', 'error');
+                return;
+            }
+            if (state.processing) {
+                showToast('正在处理中，请稍候...', 'info');
+                return;
+            }
+
+            state.processing = true;
+            downloadZIPBtn.disabled = true;
+            showToast('正在打包下载 ZIP，请稍候...', 'info');
+
+            try {
+                const zip = new JSZip();
+                const imgs = state.images;
+
+                // 收集未删除的图片索引（按选择顺序）
+                const indices = [];
+                for (const gidx of sel) {
+                    const range = getGroupRange(gidx);
+                    if (range) {
+                        for (let i = range.start; i <= range.end; i++) {
+                            if (i >= 0 && i < imgs.length && !imgs[i].deleted) {
+                                indices.push(i);
+                            }
+                        }
+                    }
+                }
+
+                if (indices.length === 0) {
+                    showToast('所选组中没有有效图片（已被删除）', 'error');
+                    state.processing = false;
+                    updateButtons();
+                    return;
+                }
+
+                const uniqueIndices = [...new Set(indices)];
+
+                const batchSize = 20;
+                for (let batch = 0; batch < uniqueIndices.length; batch += batchSize) {
+                    const batchIndices = uniqueIndices.slice(batch, batch + batchSize);
+                    for (const idx of batchIndices) {
+                        const img = imgs[idx];
+                        const blob = img.rotatedBlob ? img.rotatedBlob : await fetch(img.blobUrl).then(r => r.blob());
+                        const ext = img.name.includes('.') ? img.name.split('.').pop() : 'jpg';
+                        const seq = (idx + 1).toString().padStart(4, '0');
+                        zip.file(`${seq}_${img.name}`, blob);
+                    }
+                    await new Promise(r => setTimeout(r, 0));
+                }
+
+                const content = await zip.generateAsync({ type: 'blob' });
+                const link = document.createElement('a');
+                link.href = URL.createObjectURL(content);
+                const dateStr = new Date().toISOString().slice(0, 10);
+                link.download = `图片组合_${dateStr}.zip`;
+                document.body.appendChild(link);
+                link.click();
+                document.body.removeChild(link);
+                URL.revokeObjectURL(link.href);
+
+                showToast(`✅ 下载成功！共 ${uniqueIndices.length} 张图片`, 'success');
+            } catch (err) {
+                console.error('下载失败:', err);
+                showToast('下载失败，请重试', 'error');
+            }
+
+            state.processing = false;
+            updateButtons();
+        }
+
+        // ============================================================
+        //  下载功能 - PDF（每页3张，固定尺寸，页码 11pt）
+        // ============================================================
+        async function downloadPDF() {
+            const groups = getGroups();
+            const sel = state.selectedGroups;
+            if (sel.length === 0) {
+                showToast('请先选择要下载的组', 'error');
+                return;
+            }
+            if (state.processing) {
+                showToast('正在处理中，请稍候...', 'info');
+                return;
+            }
+
+            state.processing = true;
+            downloadPDFBtn.disabled = true;
+            showToast('正在生成 PDF，请稍候...', 'info');
+
+            try {
+                const { PDFDocument, rgb, StandardFonts } = PDFLib;
+                const pdfDoc = await PDFDocument.create();
+                const font = await pdfDoc.embedFont(StandardFonts.Helvetica);
+
+                const imgs = state.images;
+                // 收集未删除的图片索引（按选择顺序）
+                const indices = [];
+                for (const gidx of sel) {
+                    const range = getGroupRange(gidx);
+                    if (range) {
+                        for (let i = range.start; i <= range.end; i++) {
+                            if (i >= 0 && i < imgs.length && !imgs[i].deleted) {
+                                indices.push(i);
+                            }
+                        }
+                    }
+                }
+                if (indices.length === 0) {
+                    showToast('所选组中没有有效图片（已被删除）', 'error');
+                    state.processing = false;
+                    updateButtons();
+                    return;
+                }
+
+                // PDF 页面尺寸 A4 (单位: mm)
+                const pageWidth = 210;
+                const pageHeight = 297;
+                const margin = 20; // 2cm 边距
+                const contentWidth = pageWidth - 2 * margin; // 170mm
+                const contentHeight = pageHeight - 2 * margin; // 257mm
+
+                // 每张图固定尺寸 (mm)
+                const imgWidth = 169.3; // 16.93cm
+                const imgHeight = 76.2; // 7.62cm
+                const spacing = 5; // 图之间空行高度 (mm)
+
+                // 每页3张图 + 2个间隔 + 页码
+                const totalImgHeight = 3 * imgHeight + 2 * spacing; // 238.6mm
+                const pageNumberHeight = 12; // 页码区域高度
+
+                // 检查是否超出可用高度
+                if (totalImgHeight + pageNumberHeight > contentHeight) {
+                    showToast('图片尺寸超出页面范围，请调整参数', 'error');
+                    state.processing = false;
+                    updateButtons();
+                    return;
+                }
+
+                // 分页
+                const pageSize = 3;
+                let pageNumber = 1;
+
+                for (let start = 0; start < indices.length; start += pageSize) {
+                    const pageIndices = indices.slice(start, start + pageSize);
+                    const page = pdfDoc.addPage([pageWidth, pageHeight]);
+
+                    // 计算起始 Y 坐标 (从顶部开始)
+                    let currentY = pageHeight - margin - imgHeight;
+
+                    // 循环绘制每张图
+                    for (let i = 0; i < pageIndices.length; i++) {
+                        const imgIdx = pageIndices[i];
+                        const imgData = imgs[imgIdx];
+
+                        // 获取图片字节
+                        let imageBytes;
+                        let embedMethod;
+                        try {
+                            const response = await fetch(imgData.blobUrl);
+                            imageBytes = await response.arrayBuffer();
+                            const mime = imgData.file ? imgData.file.type : 'image/jpeg';
+                            if (mime === 'image/png') {
+                                embedMethod = 'embedPng';
+                            } else {
+                                embedMethod = 'embedJpg';
+                            }
+                        } catch (e) {
+                            console.warn('获取图片失败', imgData.name);
+                            continue;
+                        }
+
+                        // 嵌入图片
+                        let embeddedImage;
+                        try {
+                            if (embedMethod === 'embedPng') {
+                                embeddedImage = await pdfDoc.embedPng(imageBytes);
+                            } else {
+                                embeddedImage = await pdfDoc.embedJpg(imageBytes);
+                            }
+                        } catch (e) {
+                            try {
+                                embeddedImage = await pdfDoc.embedJpg(imageBytes);
+                            } catch (e2) {
+                                console.warn('嵌入图片失败', imgData.name);
+                                continue;
+                            }
+                        }
+
+                        // 绘制图片 (水平居中)
+                        const x = margin + (contentWidth - imgWidth) / 2;
+                        const y = currentY;
+
+                        page.drawImage(embeddedImage, {
+                            x: x,
+                            y: y,
+                            width: imgWidth,
+                            height: imgHeight,
+                        });
+
+                        // 更新 Y 坐标：下一张图在下方
+                        currentY -= imgHeight + spacing;
+                    }
+
+                    // 绘制页码 (底部居中，字体大小 11pt，参照 Word 默认)
+                    const pageNumText = String(pageNumber);
+                    const fontSize = 9;                          // 小五号（9pt）
+                    // 使用 Times-Roman（衬线字体，视觉接近宋体）
+                    const timesFont = await pdfDoc.embedFont(PDFLib.StandardFonts.TimesRoman);
+                    const textWidth = timesFont.widthOfTextAtSize(pageNumText, fontSize);
+                    const textX = (pageWidth - textWidth) / 2;
+                    const textY = margin / 2 + 2;
+
+                    page.drawText(pageNumText, {
+                        x: textX,
+                        y: textY,
+                        size: fontSize,
+                        font: timesFont,
+                        color: rgb(0, 0, 0),
+                    });
+
+                    pageNumber++;
+                }
+
+                // 生成 PDF 字节
+                const pdfBytes = await pdfDoc.save();
+
+                // 下载
+                const blob = new Blob([pdfBytes], { type: 'application/pdf' });
+                const link = document.createElement('a');
+                link.href = URL.createObjectURL(blob);
+                const dateStr = new Date().toISOString().slice(0, 10);
+                link.download = `图片组合_${dateStr}.pdf`;
+                document.body.appendChild(link);
+                link.click();
+                document.body.removeChild(link);
+                URL.revokeObjectURL(link.href);
+
+                showToast(`✅ PDF 下载成功！共 ${pageNumber - 1} 页`, 'success');
+            } catch (err) {
+                console.error('PDF生成失败:', err);
+                showToast('PDF生成失败，请重试', 'error');
+            }
+
+            state.processing = false;
+            updateButtons();
+        }
+
+        // ============================================================
+        //  清空所有
+        // ============================================================
+        function clearAll() {
+            if (state.images.length === 0) return;
+            for (const img of state.images) {
+                URL.revokeObjectURL(img.blobUrl);
+            }
+            state.images = [];
+            state.breakPoints.clear();
+            state.selectedGroups = [];
+            updateUI();
+            showToast('已清空所有图片', 'info');
+        }
+
+        // ============================================================
+        //  事件绑定
+        // ============================================================
+
+        // 上传文件夹
+        folderInput.addEventListener('change', (e) => {
+            const files = e.target.files;
+            if (files && files.length > 0) {
+                loadFiles(files);
+            }
+            folderInput.value = '';
+        });
+
+        // 清空
+        clearBtn.addEventListener('click', clearAll);
+
+        // 清除断点
+        clearBreaksBtn.addEventListener('click', clearAllBreaks);
+
+        // 自动分组
+        autoGroupBtn.addEventListener('click', autoGroupBy50);
+
+        // 下载 ZIP
+        downloadZIPBtn.addEventListener('click', downloadCombinationZIP);
+
+        // 下载 PDF
+        downloadPDFBtn.addEventListener('click', downloadPDF);
+
+        // 重置组合
+        resetCombineBtn.addEventListener('click', resetCombine);
+
+        // 拖拽上传
+        document.addEventListener('dragover', (e) => {
+            e.preventDefault();
+        });
+        document.addEventListener('drop', (e) => {
+            e.preventDefault();
+            const items = e.dataTransfer.items;
+            if (items) {
+                const files = [];
+                for (const item of items) {
+                    if (item.kind === 'file') {
+                        const entry = item.webkitGetAsEntry ? item.webkitGetAsEntry() : null;
+                        if (entry && entry.isDirectory) {
+                            showToast('请使用「上传文件夹」按钮选择目录', 'info');
+                            return;
+                        }
+                        const file = item.getAsFile();
+                        if (file) files.push(file);
+                    }
+                }
+                if (files.length > 0) {
+                    loadFiles(files);
+                }
+            }
+        });
+
+        // ============================================================
+        //  初始化
+        // ============================================================
+        updateUI();
+        showToast('欢迎使用！点击「上传文件夹」开始管理图片', 'info');
+    </script>
+
+</body>
+</html>
